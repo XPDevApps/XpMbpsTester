@@ -36,7 +36,7 @@
     background: linear-gradient(90deg, #4caf50, #8bc34a);
     transition: width 0.3s ease;
   }
-  #speed, #status {
+  #speed, #latency, #status {
     font-weight: bold;
     margin: 20px 0;
     font-size: 3rem;
@@ -66,30 +66,58 @@
 </div>
 
 <div id="speed">SPEED: 0 MBPS</div>
+<div id="latency">LATENCY: -- MS</div>
 <div id="status">CLICK "START" TO BEGIN THE TEST.</div>
 <button id="startBtn">START TEST</button>
 
 <script>
   const maxMbps = 999; // Max affiché et barre max à 999 Mbps
-  const url = 'https://speed.cloudflare.com/__down?bytes=475000000';
+  const downloadUrl = 'https://speed.cloudflare.com/__down?bytes=475000000';
+  const latencyUrl = 'https://speed.cloudflare.com/__down?bytes=500'; // petit fichier pour ping
 
   const bar = document.getElementById('bar');
   const speedText = document.getElementById('speed');
+  const latencyText = document.getElementById('latency');
   const status = document.getElementById('status');
   const startBtn = document.getElementById('startBtn');
 
-  startBtn.addEventListener('click', () => {
+  startBtn.addEventListener('click', async () => {
     startBtn.disabled = true;
     status.textContent = "TEST IN PROGRESS...";
     bar.style.width = "0%";
     speedText.textContent = "SPEED: 0 MBPS";
-    testDownloadSpeed();
+    latencyText.textContent = "LATENCY: -- MS";
+
+    // Test latence avant test débit
+    const latency = await testLatency(latencyUrl);
+    if (latency !== null) {
+      latencyText.textContent = `LATENCY: ${latency} MS`;
+    } else {
+      latencyText.textContent = "LATENCY: ERROR";
+    }
+
+    // Test débit
+    await testDownloadSpeed();
+
+    startBtn.disabled = false;
   });
+
+  async function testLatency(url) {
+    try {
+      const start = performance.now();
+      // on fait un fetch sans cors, sans cache juste pour mesurer le délai aller-retour
+      await fetch(url, { cache: "no-store", mode: "no-cors" });
+      const end = performance.now();
+      return (end - start).toFixed(2);
+    } catch {
+      return null;
+    }
+  }
 
   async function testDownloadSpeed() {
     try {
       const startTime = performance.now();
-      const response = await fetch(url, { cache: "no-store" });
+      const response = await fetch(downloadUrl, { cache: "no-store" });
       const reader = response.body.getReader();
       let bytesReceived = 0;
 
@@ -104,7 +132,6 @@
         const speedBps = bitsLoaded / duration;
         const speedMbps = speedBps / 1_000_000;
 
-        // Barre max 999 Mbps
         const percent = Math.min((speedMbps / maxMbps) * 100, 100);
         bar.style.width = percent + "%";
         speedText.textContent = `SPEED: ${speedMbps.toFixed(2)} MBPS`;
@@ -117,12 +144,11 @@
       const finalSpeedMbps = finalSpeedBps / 1_000_000;
 
       status.textContent = `TEST COMPLETED IN ${totalDuration.toFixed(2)} SECONDS. AVERAGE SPEED: ${finalSpeedMbps.toFixed(2)} MBPS.`;
-      startBtn.disabled = false;
     } catch (err) {
       status.textContent = "ERROR DURING TEST: " + err.message.toUpperCase();
-      startBtn.disabled = false;
       bar.style.width = "0%";
       speedText.textContent = "SPEED: 0 MBPS";
+      latencyText.textContent = "LATENCY: -- MS";
     }
   }
 </script>
