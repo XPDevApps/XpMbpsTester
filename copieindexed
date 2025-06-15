@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SPEED TEST</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 40px;
+    background-image: url('https://image.eklablog.com/OlraMXa3Fr2Nibs-yJ_qcKPSjLQ=/filters:no_upscale()/image%2F1234972%2F20250615%2Fob_179dfe_iamge.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    color: red;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  h2 {
+    font-size: 5rem;
+    margin-bottom: 30px;
+  }
+  #container {
+    width: 100%;
+    max-width: 800px;
+    height: 80px;
+    background-color: rgba(221, 221, 221, 0.6);
+    border-radius: 40px;
+    overflow: hidden;
+    margin: 30px auto;
+  }
+  #bar {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, #4caf50, #8bc34a);
+    transition: width 0.3s ease;
+  }
+  #speed, #latency, #status {
+    font-weight: bold;
+    margin: 20px 0;
+    font-size: 3rem;
+  }
+  button {
+    background-color: #8B4513;
+    border: none;
+    padding: 20px 60px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 10px;
+    font-size: 3rem;
+  }
+  button:disabled {
+    background-color: #5a2f0a;
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+
+<h2>SPEED TEST BY XP DEV</h2>
+
+<div id="container">
+  <div id="bar"></div>
+</div>
+
+<div id="speed">SPEED: 0 MBPS</div>
+<div id="latency">LATENCY: -- MS</div>
+<div id="status">CLICK "START" TO BEGIN THE TEST.</div>
+<button id="startBtn">START TEST</button>
+
+<script>
+  const maxMbps = 999; // Max affiché et barre max à 999 Mbps
+  const downloadUrl = 'https://speed.cloudflare.com/__down?bytes=38500000';
+  const latencyUrl = 'https://xpdevapps.github.io/XpMbpsTester/google1fd4f9f9edfc7310.html'; // petit fichier pour ping
+
+  const bar = document.getElementById('bar');
+  const speedText = document.getElementById('speed');
+  const latencyText = document.getElementById('latency');
+  const status = document.getElementById('status');
+  const startBtn = document.getElementById('startBtn');
+
+  startBtn.addEventListener('click', async () => {
+    startBtn.disabled = true;
+    status.textContent = "TEST IN PROGRESS...";
+    bar.style.width = "0%";
+    speedText.textContent = "SPEED: 0 MBPS";
+    latencyText.textContent = "LATENCY: -- MS";
+
+    // Test latence avant test débit
+    const latency = await testLatency(latencyUrl);
+    if (latency !== null) {
+      latencyText.textContent = `LATENCY: ${latency} MS`;
+    } else {
+      latencyText.textContent = "LATENCY: ERROR";
+    }
+
+    // Test débit
+    await testDownloadSpeed();
+
+    startBtn.disabled = false;
+  });
+
+  async function testLatency(url) {
+    try {
+      const start = performance.now();
+      // on fait un fetch sans cors, sans cache juste pour mesurer le délai aller-retour
+      await fetch(url, { cache: "no-store", mode: "no-cors" });
+      const end = performance.now();
+      return (end - start).toFixed(2);
+    } catch {
+      return null;
+    }
+  }
+
+  async function testDownloadSpeed() {
+    try {
+      const startTime = performance.now();
+      const response = await fetch(downloadUrl, { cache: "no-store" });
+      const reader = response.body.getReader();
+      let bytesReceived = 0;
+
+      while(true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        bytesReceived += value.length;
+
+        const now = performance.now();
+        const duration = (now - startTime) / 1000;
+        const bitsLoaded = bytesReceived * 8;
+        const speedBps = bitsLoaded / duration;
+        const speedMbps = speedBps / 1_000_000;
+
+        const percent = Math.min((speedMbps / maxMbps) * 100, 100);
+        bar.style.width = percent + "%";
+        speedText.textContent = `SPEED: ${speedMbps.toFixed(2)} MBPS`;
+      }
+
+      const endTime = performance.now();
+      const totalDuration = (endTime - startTime) / 1000;
+      const totalBits = bytesReceived * 8;
+      const finalSpeedBps = totalBits / totalDuration;
+      const finalSpeedMbps = finalSpeedBps / 1_000_000;
+
+      status.textContent = `TEST COMPLETED IN ${totalDuration.toFixed(2)} SECONDS. AVERAGE SPEED: ${finalSpeedMbps.toFixed(2)} MBPS.`;
+    } catch (err) {
+      status.textContent = "ERROR DURING TEST: " + err.message.toUpperCase();
+      bar.style.width = "0%";
+      speedText.textContent = "SPEED: 0 MBPS";
+      latencyText.textContent = "LATENCY: -- MS";
+    }
+  }
+</script>
+
+</body>
+</html>
