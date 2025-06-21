@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Advanced Local File Read Speed Test</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 2rem;
+    background: #f9f9f9;
+  }
+  input, button {
+    font-size: 1rem;
+    padding: 0.5rem 1rem;
+    margin-right: 0.5rem;
+  }
+  #result {
+    margin-top: 1rem;
+    white-space: pre-wrap;
+    font-size: 1.1rem;
+  }
+  #chart {
+    margin-top: 2rem;
+    max-width: 600px;
+    height: 300px;
+    border: 1px solid #ccc;
+  }
+</style>
+</head>
+<body>
+<h1>Advanced Local File Read Speed Test</h1>
+
+<input type="file" id="fileInput" />
+<label for="runs">Number of reads:</label>
+<input type="number" id="runs" min="1" max="20" value="5" style="width: 60px;" />
+<button id="startTest">Start Test</button>
+
+<div id="result"></div>
+<canvas id="chart"></canvas>
+
+<script>
+  const fileInput = document.getElementById('fileInput');
+  const startBtn = document.getElementById('startTest');
+  const runsInput = document.getElementById('runs');
+  const result = document.getElementById('result');
+  const chartCanvas = document.getElementById('chart');
+  const ctx = chartCanvas.getContext('2d');
+  chartCanvas.width = 600;
+  chartCanvas.height = 300;
+
+  // Clear the canvas
+  function clearChart() {
+    ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, chartCanvas.width, chartCanvas.height);
+  }
+
+  // Draw simple chart (speed in MB/s per run)
+  function drawChart(data) {
+    clearChart();
+    const padding = 40;
+    const maxSpeed = Math.max(...data) * 1.1;
+    const stepX = (chartCanvas.width - padding * 2) / (data.length - 1 || 1);
+    const stepY = (chartCanvas.height - padding * 2) / maxSpeed;
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    // Y axis
+    ctx.moveTo(padding, padding);
+    ctx.lineTo(padding, chartCanvas.height - padding);
+    // X axis
+    ctx.lineTo(chartCanvas.width - padding, chartCanvas.height - padding);
+    ctx.stroke();
+
+    // Y Labels
+    ctx.fillStyle = '#333';
+    ctx.font = '12px Arial';
+    for(let i = 0; i <= 5; i++) {
+      const yVal = (maxSpeed / 5) * i;
+      const yPos = chartCanvas.height - padding - yVal * stepY;
+      ctx.fillText(yVal.toFixed(0) + ' MB/s', 5, yPos + 4);
+      ctx.beginPath();
+      ctx.moveTo(padding - 5, yPos);
+      ctx.lineTo(padding, yPos);
+      ctx.stroke();
+    }
+
+    // X Labels
+    for(let i = 0; i < data.length; i++) {
+      const xPos = padding + i * stepX;
+      ctx.fillText((i+1).toString(), xPos - 5, chartCanvas.height - padding + 20);
+      ctx.beginPath();
+      ctx.moveTo(xPos, chartCanvas.height - padding);
+      ctx.lineTo(xPos, chartCanvas.height - padding + 5);
+      ctx.stroke();
+    }
+
+    // Line graph
+    ctx.strokeStyle = '#007acc';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    data.forEach((speed, i) => {
+      const x = padding + i * stepX;
+      const y = chartCanvas.height - padding - speed * stepY;
+      if(i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Points
+    ctx.fillStyle = '#007acc';
+    data.forEach((speed, i) => {
+      const x = padding + i * stepX;
+      const y = chartCanvas.height - padding - speed * stepY;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  startBtn.addEventListener('click', async () => {
+    const file = fileInput.files[0];
+    if (!file) {
+      result.textContent = "Please select a file before starting.";
+      return;
+    }
+
+    const runs = parseInt(runsInput.value, 10);
+    if (runs <= 0) {
+      result.textContent = "The number of reads must be greater than 0.";
+      return;
+    }
+
+    result.textContent = "Test in progress...";
+    const speeds = [];
+
+    // Async file read function with FileReader
+    const readFile = () => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        const startTime = performance.now();
+
+        reader.onload = () => {
+          const endTime = performance.now();
+          resolve(endTime - startTime);
+        };
+        reader.onerror = () => reject("Error reading the file.");
+        reader.readAsArrayBuffer(file);
+      });
+    };
+
+    for (let i = 0; i < runs; i++) {
+      result.textContent = `Reading ${i + 1} of ${runs}...`;
+      try {
+        const durationMs = await readFile();
+        const durationSec = durationMs / 1000;
+        const sizeMB = file.size / (1024 * 1024);
+        const speedMBs = sizeMB / durationSec;
+        speeds.push(speedMBs);
+      } catch (e) {
+        result.textContent = e;
+        return;
+      }
+    }
+
+    const avgSpeed = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+
+    let text = `Test completed!\nNumber of reads: ${runs}\nFile size: ${(file.size/(1024*1024)).toFixed(2)} MB\n`;
+    speeds.forEach((v, i) => {
+      text += `Read ${i + 1}: ${v.toFixed(2)} MB/s\n`;
+    });
+    text += `\nAverage speed: ${avgSpeed.toFixed(2)} MB/s`;
+
+    result.textContent = text;
+
+    drawChart(speeds);
+  });
+</script>
+</body>
+</html>
