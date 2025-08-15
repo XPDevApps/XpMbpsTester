@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web Camera App</title>
+<style>
+  video, canvas { width: 100%; max-width: 400px; border: 1px solid #ccc; display: block; margin-bottom: 10px; }
+  select, button, a { margin-top: 10px; padding: 10px; width: 100%; display: block; }
+</style>
+</head>
+<body>
+
+<h2>Web Camera App</h2>
+
+<select id="resolution">
+  <option value="320x240">320x240</option>
+  <option value="640x480">640x480</option>
+  <option value="1280x720" selected>1280x720</option>
+  <option value="1920x1080">1920x1080</option>
+</select>
+
+<select id="facing">
+  <option value="user">Front Camera</option>
+  <option value="environment">Back Camera</option>
+</select>
+
+<video id="video" autoplay></video>
+<canvas id="canvas"></canvas>
+
+<button id="snap">Capture Photo</button>
+<a id="downloadPhoto">Download Photo</a>
+
+<button id="startVideo">Start Recording</button>
+<button id="stopVideo">Stop Recording</button>
+<a id="downloadVideo">Download Video</a>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const context = canvas.getContext('2d');
+const snapBtn = document.getElementById('snap');
+const resolutionSelect = document.getElementById('resolution');
+const facingSelect = document.getElementById('facing');
+const startBtn = document.getElementById('startVideo');
+const stopBtn = document.getElementById('stopVideo');
+const downloadPhoto = document.getElementById('downloadPhoto');
+const downloadVideo = document.getElementById('downloadVideo');
+
+let currentStream;
+let recorder;
+let chunks = [];
+
+// Démarrage caméra
+async function startCamera() {
+    if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+    }
+    const [width, height] = resolutionSelect.value.split('x').map(Number);
+    const facingMode = facingSelect.value;
+
+    try {
+        currentStream = await navigator.mediaDevices.getUserMedia({
+            video: { width, height, facingMode },
+            audio: true
+        });
+        video.srcObject = currentStream;
+    } catch (err) {
+        console.error("Camera error:", err);
+        alert("Camera access denied or not available");
+    }
+}
+
+// Capture photo
+snapBtn.addEventListener('click', () => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    downloadPhoto.href = canvas.toDataURL("image/jpeg");
+    downloadPhoto.download = "photo.jpg";
+});
+
+// Start video recording
+startBtn.addEventListener('click', () => {
+    if (!currentStream) return alert("Camera not started");
+    chunks = [];
+    recorder = new MediaRecorder(currentStream); // flux natif
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: chunks[0].type });
+        downloadVideo.href = URL.createObjectURL(blob);
+        downloadVideo.download = "video.webm";
+    };
+    recorder.start();
+});
+
+// Stop recording
+stopBtn.addEventListener('click', () => {
+    if (recorder && recorder.state === "recording") recorder.stop();
+});
+
+// Redémarrage caméra si changement
+resolutionSelect.addEventListener('change', startCamera);
+facingSelect.addEventListener('change', startCamera);
+
+// Initial start
+startCamera();
+</script>
+
+</body>
+</html>
