@@ -3,151 +3,129 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Advanced Camera & Screen Recorder</title>
+<title>Camera MKV Recorder</title>
 <style>
-  video, canvas { width: 100%; max-width: 500px; border: 1px solid #ccc; margin-bottom: 10px; }
-  select, button { margin-top: 10px; padding: 10px; width: 100%; }
+  video { width: 100%; max-width: 600px; border: 1px solid #ccc; }
+  select, button { margin: 5px 0; padding: 10px; width: 100%; max-width: 600px; }
 </style>
 </head>
 <body>
 
-<h2>Camera & Screen Recorder with Custom Resolutions</h2>
+<h2>Camera MKV Recorder</h2>
 
-<select id="mode">
-  <option value="camera">Webcam</option>
-  <option value="screen">Screen</option>
-</select>
-
-<select id="videoRes">
-  <option value="3840x2160">4K (3840x2160)</option>
-  <option value="2560x1440">2K (2560x1440)</option>
-  <option value="2048x1080">17:9 (2048x1080)</option>
-  <option value="1920x1080">1080p (1920x1080)</option>
-  <option value="1920x886">17:9 (1920x886)</option>
-  <option value="1366x768">1366x768</option>
-</select>
-
-<select id="facing">
-  <option value="user">Front Camera</option>
-  <option value="environment">Back Camera</option>
-</select>
-
-<select id="photoRes">
-  <option value="4032x3024">12MP</option>
-  <option value="12000x9000">108MP</option>
-  <option value="8688x5792">50MP</option>
-  <option value="4000x3000">10MP</option>
-  <option value="2592x1944">5MP</option>
-  <option value="3264x2448">8MP</option>
-</select>
-
-<video id="video" autoplay muted></video>
-<canvas id="canvas"></canvas>
-<button id="snap">Capture Photo</button>
-<button id="start">Start Recording</button>
-<button id="stop" disabled>Stop & Download</button>
+<select id="cameraSelect"></select>
+<video id="video" autoplay playsinline></video>
+<button id="startStop">Start Recording</button>
+<button id="capturePhoto">Capture Photo</button>
+<a id="downloadLink" style="display:none">Download MKV</a>
+<canvas id="canvas" style="display:none"></canvas>
 
 <script>
 const video = document.getElementById('video');
+const cameraSelect = document.getElementById('cameraSelect');
+const startStopBtn = document.getElementById('startStop');
+const capturePhotoBtn = document.getElementById('capturePhoto');
+const downloadLink = document.getElementById('downloadLink');
 const canvas = document.getElementById('canvas');
-const context = canvas.getContext('2d');
-const startBtn = document.getElementById('start');
-const stopBtn = document.getElementById('stop');
-const snapBtn = document.getElementById('snap');
-const modeSelect = document.getElementById('mode');
-const facingSelect = document.getElementById('facing');
-const videoResSelect = document.getElementById('videoRes');
-const photoResSelect = document.getElementById('photoRes');
+const ctx = canvas.getContext('2d');
 
-let currentStream;
-let mediaRecorder;
-let recordedChunks = [];
+let currentStream = null;
+let mediaRecorder = null;
+let recordedBlobs = [];
+let recording = false;
 
-async function startStream() {
-  if (currentStream) currentStream.getTracks().forEach(track => track.stop());
-  recordedChunks = [];
+// Liste des caméras disponibles
+async function enumerateCameras() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const videoDevices = devices.filter(d => d.kind === 'videoinput');
+  cameraSelect.innerHTML = '';
+  videoDevices.forEach((device, i) => {
+    const option = document.createElement('option');
+    option.value = device.deviceId;
+    option.text = device.label || `Camera ${i + 1}`;
+    cameraSelect.appendChild(option);
+  });
+}
 
-  const [width, height] = videoResSelect.value.split('x').map(Number);
+// Démarrer le flux caméra
+async function startCamera(deviceId) {
+  if (currentStream) {
+    currentStream.getTracks().forEach(track => track.stop());
+  }
+  currentStream = await navigator.mediaDevices.getUserMedia({
+    video: { deviceId: deviceId ? { exact: deviceId } : undefined },
+    audio: true
+  });
+  video.srcObject = currentStream;
 
-  try {
-    if (modeSelect.value === 'camera') {
-      currentStream = await navigator.mediaDevices.getUserMedia({
-        video: { width, height, frameRate: 30, facingMode: facingSelect.value },
-        audio: true
-      });
-    } else {
-      currentStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 30 },
-        audio: true
-      });
-    }
-    video.srcObject = currentStream;
-  } catch (err) {
-    console.error("Error accessing stream:", err);
-    alert("Access denied or not available");
+  // Si on est en train d'enregistrer, relancer MediaRecorder
+  if (recording) {
+    startRecording();
   }
 }
 
-// Photo capture
-snapBtn.addEventListener('click', () => {
-  const [w, h] = photoResSelect.value.split('x').map(Number);
-  canvas.width = w;
-  canvas.height = h;
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+// Démarrer / relancer l'enregistrement
+function startRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
 
-  const a = document.createElement('a');
-  a.href = canvas.toDataURL('image/jpeg', 1.0);
-  a.download = `photo_${w}x${h}.jpg`;
-  a.click();
-});
-
-// Video recording
-startBtn.addEventListener('click', () => {
-  if (!currentStream) return;
-
-  const options = {
-    mimeType: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
-    videoBitsPerSecond: 5_000_000,
-    audioBitsPerSecond: 150_000
-  };
-
+  recordedBlobs = recordedBlobs || [];
+  let options = { mimeType: 'video/x-matroska;codecs=avc1' }; // MKV H264
   try {
     mediaRecorder = new MediaRecorder(currentStream, options);
-  } catch (err) {
-    console.error("MediaRecorder not supported:", err);
-    alert("MediaRecorder not supported in this browser");
+  } catch (e) {
+    alert('MediaRecorder not supported: ' + e);
     return;
   }
 
-  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-  mediaRecorder.onstop = () => {
-    const blob = new Blob(recordedChunks, { type: 'video/mp4' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `record_${videoResSelect.value}.mp4`;
-    a.click();
-    URL.revokeObjectURL(url);
+  mediaRecorder.ondataavailable = event => {
+    if (event.data && event.data.size > 0) {
+      recordedBlobs.push(event.data);
+    }
   };
 
-  mediaRecorder.start();
-  startBtn.disabled = true;
-  stopBtn.disabled = false;
+  mediaRecorder.start(1000); // envoie les blobs toutes les secondes
+}
+
+// Bouton Start / Stop
+startStopBtn.addEventListener('click', () => {
+  if (!recording) {
+    recording = true;
+    startRecording();
+    startStopBtn.textContent = 'Stop Recording';
+  } else {
+    recording = false;
+    mediaRecorder.stop();
+    startStopBtn.textContent = 'Start Recording';
+    const superBlob = new Blob(recordedBlobs, { type: 'video/x-matroska' });
+    downloadLink.href = URL.createObjectURL(superBlob);
+    downloadLink.download = 'recording.mkv';
+    downloadLink.style.display = 'block';
+    downloadLink.textContent = 'Download MKV';
+  }
 });
 
-stopBtn.addEventListener('click', () => {
-  mediaRecorder.stop();
-  startBtn.disabled = false;
-  stopBtn.disabled = true;
+// Changement de caméra
+cameraSelect.addEventListener('change', () => {
+  startCamera(cameraSelect.value);
 });
 
-// Restart stream if options change
-modeSelect.addEventListener('change', startStream);
-facingSelect.addEventListener('change', startStream);
-videoResSelect.addEventListener('change', startStream);
+// Capture photo
+capturePhotoBtn.addEventListener('click', () => {
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const photoBlob = canvas.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'photo.jpg';
+    a.click();
+  }, 'image/jpeg', 0.95);
+});
 
-// Start initial stream
-startStream();
+// Initialisation
+enumerateCameras().then(() => startCamera());
 </script>
 
 </body>
