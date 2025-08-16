@@ -3,21 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Web Camera App</title>
+<title>Advanced Camera & Screen Recorder</title>
 <style>
-  video, canvas { width: 100%; max-width: 400px; border: 1px solid #ccc; }
+  video, canvas { width: 100%; max-width: 500px; border: 1px solid #ccc; margin-bottom: 10px; }
   select, button { margin-top: 10px; padding: 10px; width: 100%; }
 </style>
 </head>
 <body>
 
-<h2>Web Camera App</h2>
+<h2>Camera & Screen Recorder with Custom Resolutions</h2>
 
-<select id="resolution">
-  <option value="320x240">320x240</option>
-  <option value="640x480">640x480</option>
-  <option value="1280x720" selected>1280x720</option>
-  <option value="1920x1080">1920x1080</option>
+<select id="mode">
+  <option value="camera">Webcam</option>
+  <option value="screen">Screen</option>
+</select>
+
+<select id="videoRes">
+  <option value="3840x2160">4K (3840x2160)</option>
+  <option value="2560x1440">2K (2560x1440)</option>
+  <option value="2048x1080">17:9 (2048x1080)</option>
+  <option value="1920x1080">1080p (1920x1080)</option>
+  <option value="1920x886">17:9 (1920x886)</option>
+  <option value="1366x768">1366x768</option>
 </select>
 
 <select id="facing">
@@ -25,107 +32,122 @@
   <option value="environment">Back Camera</option>
 </select>
 
-<video id="video" autoplay></video>
-<button id="snap">Capture Photo</button>
-<button id="startVideo">Start Recording</button>
-<button id="stopVideo">Stop Recording</button>
+<select id="photoRes">
+  <option value="4032x3024">12MP</option>
+  <option value="12000x9000">108MP</option>
+  <option value="8688x5792">50MP</option>
+  <option value="4000x3000">10MP</option>
+  <option value="2592x1944">5MP</option>
+  <option value="3264x2448">8MP</option>
+</select>
+
+<video id="video" autoplay muted></video>
 <canvas id="canvas"></canvas>
+<button id="snap">Capture Photo</button>
+<button id="start">Start Recording</button>
+<button id="stop" disabled>Stop & Download</button>
 
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const context = canvas.getContext('2d');
+const startBtn = document.getElementById('start');
+const stopBtn = document.getElementById('stop');
 const snapBtn = document.getElementById('snap');
-const resolutionSelect = document.getElementById('resolution');
+const modeSelect = document.getElementById('mode');
 const facingSelect = document.getElementById('facing');
-const startBtn = document.getElementById('startVideo');
-const stopBtn = document.getElementById('stopVideo');
+const videoResSelect = document.getElementById('videoRes');
+const photoResSelect = document.getElementById('photoRes');
 
 let currentStream;
 let mediaRecorder;
 let recordedChunks = [];
 
-// Démarrer la caméra
-async function startCamera() {
-  if (currentStream) {
-    currentStream.getTracks().forEach(track => track.stop());
-  }
+async function startStream() {
+  if (currentStream) currentStream.getTracks().forEach(track => track.stop());
+  recordedChunks = [];
 
-  const [width, height] = resolutionSelect.value.split('x').map(Number);
-  const facingMode = facingSelect.value;
+  const [width, height] = videoResSelect.value.split('x').map(Number);
 
   try {
-    currentStream = await navigator.mediaDevices.getUserMedia({
-      video: { width, height, facingMode },
-      audio: true
-    });
+    if (modeSelect.value === 'camera') {
+      currentStream = await navigator.mediaDevices.getUserMedia({
+        video: { width, height, frameRate: 30, facingMode: facingSelect.value },
+        audio: true
+      });
+    } else {
+      currentStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 30 },
+        audio: true
+      });
+    }
     video.srcObject = currentStream;
   } catch (err) {
-    console.error("Error accessing camera: ", err);
-    alert("Camera access denied or not available");
+    console.error("Error accessing stream:", err);
+    alert("Access denied or not available");
   }
 }
 
-// Capture photo
+// Photo capture
 snapBtn.addEventListener('click', () => {
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  const [w, h] = photoResSelect.value.split('x').map(Number);
+  canvas.width = w;
+  canvas.height = h;
   context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // Télécharger l'image
-  canvas.toBlob(blob => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'photo.jpg';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }, 'image/jpeg', 0.95);
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/jpeg', 1.0);
+  a.download = `photo_${w}x${h}.jpg`;
+  a.click();
 });
 
-// Démarrer l'enregistrement vidéo
+// Video recording
 startBtn.addEventListener('click', () => {
-  if (!currentStream) return alert("Start the camera first");
+  if (!currentStream) return;
 
   const options = {
-    mimeType: 'video/mp4; codecs="avc1.42E01E"',
-    videoBitsPerSecond: 10_000_000
+    mimeType: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+    videoBitsPerSecond: 5_000_000,
+    audioBitsPerSecond: 150_000
   };
 
-  recordedChunks = [];
-  mediaRecorder = new MediaRecorder(currentStream, options);
+  try {
+    mediaRecorder = new MediaRecorder(currentStream, options);
+  } catch (err) {
+    console.error("MediaRecorder not supported:", err);
+    alert("MediaRecorder not supported in this browser");
+    return;
+  }
 
-  mediaRecorder.ondataavailable = e => {
-    if (e.data.size > 0) recordedChunks.push(e.data);
-  };
-
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
   mediaRecorder.onstop = () => {
     const blob = new Blob(recordedChunks, { type: 'video/mp4' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'video.mp4';
+    a.download = `record_${videoResSelect.value}.mp4`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   mediaRecorder.start();
-  alert("Recording started");
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
 });
 
-// Stop vidéo
 stopBtn.addEventListener('click', () => {
-  if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    mediaRecorder.stop();
-    alert("Recording stopped");
-  }
+  mediaRecorder.stop();
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
 });
 
-// Redémarrer la caméra si résolution ou caméra change
-resolutionSelect.addEventListener('change', startCamera);
-facingSelect.addEventListener('change', startCamera);
+// Restart stream if options change
+modeSelect.addEventListener('change', startStream);
+facingSelect.addEventListener('change', startStream);
+videoResSelect.addEventListener('change', startStream);
 
-// Démarrage initial
-startCamera();
+// Start initial stream
+startStream();
 </script>
 
 </body>
