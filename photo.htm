@@ -3,81 +3,88 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MKV Recorder Continuous</title>
+<title>Web Camera App MKV</title>
 <style>
-video { width: 100%; max-width: 600px; border: 1px solid #ccc; }
-select, button { margin: 5px 0; padding: 10px; width: 100%; max-width: 600px; }
+  video, canvas { width: 100%; max-width: 400px; border: 1px solid #ccc; }
+  select, button { margin-top: 10px; padding: 10px; width: 100%; }
 </style>
 </head>
 <body>
 
-<h2>Camera MKV Recorder</h2>
+<h2>Web Camera App MKV</h2>
 
-<select id="cameraSelect"></select>
-<video id="video" autoplay playsinline></video>
-<button id="startStop">Start Recording</button>
-<button id="capturePhoto">Capture Photo</button>
-<a id="downloadLink" style="display:none">Download MKV</a>
-<canvas id="canvas" style="display:none"></canvas>
+<select id="resolution">
+  <option value="320x240">320x240</option>
+  <option value="640x480">640x480</option>
+  <option value="1280x720" selected>1280x720</option>
+  <option value="1920x1080">1920x1080</option>
+</select>
+
+<select id="facing">
+  <option value="user">Front Camera</option>
+  <option value="environment">Back Camera</option>
+</select>
+
+<video id="video" autoplay></video>
+<button id="snap">Capture Photo</button>
+<button id="start">Start Recording</button>
+<button id="stop">Stop & Download</button>
+<canvas id="canvas"></canvas>
 
 <script>
 const video = document.getElementById('video');
-const cameraSelect = document.getElementById('cameraSelect');
-const startStopBtn = document.getElementById('startStop');
-const capturePhotoBtn = document.getElementById('capturePhoto');
-const downloadLink = document.getElementById('downloadLink');
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+const context = canvas.getContext('2d');
+const snapBtn = document.getElementById('snap');
+const startBtn = document.getElementById('start');
+const stopBtn = document.getElementById('stop');
+const resolutionSelect = document.getElementById('resolution');
+const facingSelect = document.getElementById('facing');
 
-let currentStream = null;
-let mediaRecorder = null;
+let currentStream;
+let mediaRecorder;
 let recordedBlobs = [];
 let recording = false;
 
-// Liste des caméras
-async function enumerateCameras() {
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const videoDevices = devices.filter(d => d.kind === 'videoinput');
-  cameraSelect.innerHTML = '';
-  videoDevices.forEach((device, i) => {
-    const option = document.createElement('option');
-    option.value = device.deviceId;
-    option.text = device.label || `Camera ${i + 1}`;
-    cameraSelect.appendChild(option);
-  });
-}
-
 // Démarrer la caméra
-async function startCamera(deviceId) {
+async function startCamera() {
   if (currentStream) {
+    // Stop tous les tracks existants
     currentStream.getTracks().forEach(track => track.stop());
   }
 
-  currentStream = await navigator.mediaDevices.getUserMedia({
-    video: { deviceId: deviceId ? { exact: deviceId } : undefined },
-    audio: true
-  });
-  video.srcObject = currentStream;
+  const [width, height] = resolutionSelect.value.split('x').map(Number);
+  const facingMode = facingSelect.value;
 
-  // Si on enregistre, on relance MediaRecorder sans perdre les blobs existants
-  if (recording) {
-    startRecording();
+  try {
+    currentStream = await navigator.mediaDevices.getUserMedia({
+      video: { width, height, facingMode },
+      audio: true
+    });
+    video.srcObject = currentStream;
+
+    // Si on était en enregistrement, redémarrer MediaRecorder
+    if (recording) {
+      startRecording();
+    }
+
+  } catch (err) {
+    console.error("Error accessing camera: ", err);
+    alert("Camera access denied or not available");
   }
 }
 
-// MediaRecorder continu
+// Démarrer l'enregistrement
 function startRecording() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop(); // stop temporairement pour changer de flux
-  }
+  if (!currentStream) return;
+  recordedBlobs = [];
 
-  let options = { mimeType: 'video/x-matroska;codecs=avc1' };
-  try {
-    mediaRecorder = new MediaRecorder(currentStream, options);
-  } catch (e) {
-    alert('MediaRecorder not supported: ' + e);
-    return;
-  }
+  const options = {
+    mimeType: 'video/webm; codecs=vp8', // MKV en H264 nativement n'est pas supporté dans MediaRecorder, WebM c'est plus compatible
+    videoBitsPerSecond: 5_000_000
+  };
+
+  mediaRecorder = new MediaRecorder(currentStream, options);
 
   mediaRecorder.ondataavailable = event => {
     if (event.data && event.data.size > 0) {
@@ -85,47 +92,54 @@ function startRecording() {
     }
   };
 
-  mediaRecorder.start(1000); // chunks every 1s
+  mediaRecorder.start();
+  recording = true;
+  console.log("Recording started");
 }
 
-// Start / Stop
-startStopBtn.addEventListener('click', () => {
-  if (!recording) {
-    recording = true;
-    startRecording();
-    startStopBtn.textContent = 'Stop Recording';
-  } else {
-    recording = false;
-    mediaRecorder.stop();
-    startStopBtn.textContent = 'Start Recording';
-    const superBlob = new Blob(recordedBlobs, { type: 'video/x-matroska' });
-    downloadLink.href = URL.createObjectURL(superBlob);
-    downloadLink.download = 'recording.mkv';
-    downloadLink.style.display = 'block';
-    downloadLink.textContent = 'Download MKV';
-  }
-});
+// Stop & download
+function stopRecording() {
+  if (!mediaRecorder) return;
+  mediaRecorder.stop();
+  recording = false;
 
-// Changement de caméra
-cameraSelect.addEventListener('change', () => {
-  startCamera(cameraSelect.value); // relance le flux et continue d’enregistrer
-});
+  const blob = new Blob(recordedBlobs, { type: 'video/webm' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = 'recording.webm';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }, 100);
+}
 
 // Capture photo
-capturePhotoBtn.addEventListener('click', () => {
+snapBtn.addEventListener('click', () => {
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  canvas.toBlob(blob => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'photo.jpg';
-    a.click();
-  }, 'image/jpeg', 0.95);
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const dataURL = canvas.toDataURL('image/jpeg', 0.95);
+  const a = document.createElement('a');
+  a.href = dataURL;
+  a.download = 'photo.jpg';
+  a.click();
 });
 
-// Initialisation
-enumerateCameras().then(() => startCamera());
+// Événements boutons
+startBtn.addEventListener('click', startRecording);
+stopBtn.addEventListener('click', stopRecording);
+
+// Changement de caméra ou résolution
+resolutionSelect.addEventListener('change', startCamera);
+facingSelect.addEventListener('change', startCamera);
+
+// Démarrage initial
+startCamera();
 </script>
 
 </body>
