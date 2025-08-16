@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Camera MKV Recorder</title>
+<title>MKV Recorder Continuous</title>
 <style>
-  video { width: 100%; max-width: 600px; border: 1px solid #ccc; }
-  select, button { margin: 5px 0; padding: 10px; width: 100%; max-width: 600px; }
+video { width: 100%; max-width: 600px; border: 1px solid #ccc; }
+select, button { margin: 5px 0; padding: 10px; width: 100%; max-width: 600px; }
 </style>
 </head>
 <body>
@@ -34,7 +34,7 @@ let mediaRecorder = null;
 let recordedBlobs = [];
 let recording = false;
 
-// Liste des caméras disponibles
+// Liste des caméras
 async function enumerateCameras() {
   const devices = await navigator.mediaDevices.enumerateDevices();
   const videoDevices = devices.filter(d => d.kind === 'videoinput');
@@ -47,31 +47,31 @@ async function enumerateCameras() {
   });
 }
 
-// Démarrer le flux caméra
+// Démarrer la caméra
 async function startCamera(deviceId) {
   if (currentStream) {
     currentStream.getTracks().forEach(track => track.stop());
   }
+
   currentStream = await navigator.mediaDevices.getUserMedia({
     video: { deviceId: deviceId ? { exact: deviceId } : undefined },
     audio: true
   });
   video.srcObject = currentStream;
 
-  // Si on est en train d'enregistrer, relancer MediaRecorder
+  // Si on enregistre, on relance MediaRecorder sans perdre les blobs existants
   if (recording) {
     startRecording();
   }
 }
 
-// Démarrer / relancer l'enregistrement
+// MediaRecorder continu
 function startRecording() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
+    mediaRecorder.stop(); // stop temporairement pour changer de flux
   }
 
-  recordedBlobs = recordedBlobs || [];
-  let options = { mimeType: 'video/x-matroska;codecs=avc1' }; // MKV H264
+  let options = { mimeType: 'video/x-matroska;codecs=avc1' };
   try {
     mediaRecorder = new MediaRecorder(currentStream, options);
   } catch (e) {
@@ -85,10 +85,10 @@ function startRecording() {
     }
   };
 
-  mediaRecorder.start(1000); // envoie les blobs toutes les secondes
+  mediaRecorder.start(1000); // chunks every 1s
 }
 
-// Bouton Start / Stop
+// Start / Stop
 startStopBtn.addEventListener('click', () => {
   if (!recording) {
     recording = true;
@@ -108,7 +108,7 @@ startStopBtn.addEventListener('click', () => {
 
 // Changement de caméra
 cameraSelect.addEventListener('change', () => {
-  startCamera(cameraSelect.value);
+  startCamera(cameraSelect.value); // relance le flux et continue d’enregistrer
 });
 
 // Capture photo
@@ -116,7 +116,7 @@ capturePhotoBtn.addEventListener('click', () => {
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  const photoBlob = canvas.toBlob(blob => {
+  canvas.toBlob(blob => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'photo.jpg';
