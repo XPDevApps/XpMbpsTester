@@ -9,16 +9,21 @@
 
 <style>
   body {
-    font-family: 'Poppins', sans-serif;
-    background-image: url('https://xpdevapps.github.io/XpMbpsTester/morose.jpg');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    color: white;
-    text-align: center;
-    padding: 50px 20px;
-    text-transform: uppercase;
-  }
+  font-family: 'Poppins', sans-serif;
+  background-image: url('https://xpdevapps.github.io/XpMbpsTester/morose.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  color: white;
+  text-align: center;
+  padding: 50px 20px;
+  text-transform: uppercase;
+}
+
+/* Masquer le bouton STABLE temporairement */
+.stable-hidden {
+  display: none;  
+}
   h1 {
     font-weight: 700;
     font-size: 5rem;
@@ -68,7 +73,8 @@
 
 <div class="new-section">
   <h2>XP WEBDEBIT TEST (STABLE VERSION)</h2>
-  <button class="download-btn" onclick="window.location.href='https://xpdevapps.github.io/XpMbpsTester/error404.html'">
+ <button class="download-btn stable-hidden"
+        onclick="window.location.href='https://xpdevapps.github.io/XpMbpsTester/error404.html'">
     DOWNLOAD APPS APK (1.6.015)
   </button>
 </div>
@@ -86,6 +92,7 @@
 
 </body>
 </html>
+
 
 
 
