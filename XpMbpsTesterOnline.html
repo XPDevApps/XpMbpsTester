@@ -173,31 +173,6 @@
       return 0;
     }
   }
-
-  // Test disque APK réel
-  async function testDiskAPK() {
-    try {
-      const startTime = performance.now();
-      const response = await fetch('https://xpdevapps.github.io/XpMbpsTester/0588ds.mp4'); // fichier MP4
-      const reader = response.body.getReader();
-      let bytesRead = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        bytesRead += value.length;
-
-        const now = performance.now();
-        const duration = (now - startTime) / 1000;
-        const speedMBps = (bytesRead / 1024 / 1024) / duration;
-        diskStatus.textContent = `Disk Read: ${speedMBps.toFixed(2)} MB/s`;
-      }
-
-    } catch (e) {
-      diskStatus.textContent = "Disk Test Error";
-    }
-  }
-
   // Boutons
   startBtn.addEventListener('click', async () => {
     startBtn.disabled = true;
@@ -224,6 +199,7 @@
 
 </body>
 </html>
+
 
 
 
