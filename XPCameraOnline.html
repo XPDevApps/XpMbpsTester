@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Webcam MP4 H.264 + AAC VBR</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --primary: #6750A4; /* Material You purple */
+    --on-primary: #FFFFFF;
+    --surface: #F3EFFF;
+    --on-surface: #1C1B1F;
+    --surface-variant: #E7E0EC;
+    --border-radius: 16px;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    background: var(--surface);
+    color: var(--on-surface);
+    margin:0;
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+
+h1 {
+    color: var(--primary);
+    text-align:center;
+    margin-bottom:20px;
+}
+
+.video-container {
+    display:flex;
+    gap:20px;
+    flex-wrap:wrap;
+    justify-content:center;
+    margin-bottom:20px;
+}
+
+video {
+    border-radius: var(--border-radius);
+    border: 2px solid var(--primary);
+    width: 320px;
+    max-width: 90vw;
+}
+
+.buttons {
+    display:flex;
+    gap:15px;
+    flex-wrap:wrap;
+    justify-content:center;
+    margin-bottom:20px;
+}
+
+button {
+    background-color: var(--primary);
+    color: var(--on-primary);
+    border:none;
+    border-radius: var(--border-radius);
+    padding: 12px 24px;
+    font-size:16px;
+    font-weight:500;
+    cursor:pointer;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background-color: #4f4090;
+}
+
+button:disabled {
+    background-color: var(--surface-variant);
+    color: var(--on-surface);
+    cursor: not-allowed;
+}
+
+a button {
+    background-color: #03DAC6;
+    color: #000;
+}
+
+a button:hover {
+    background-color: #00BFA5;
+}
+</style>
+</head>
+<body>
+
+<h1>🎥 Webcam → MP4 H.264 + AAC VBR</h1>
+
+<div class="video-container">
+    <video id="preview" autoplay muted></video>
+    <video id="playback" controls></video>
+</div>
+
+<div class="buttons">
+    <button id="start">▶️ Démarrer</button>
+    <button id="stop" disabled>⏹️ Arrêter</button>
+    <button id="convert" disabled>🔄 Convertir en MP4</button>
+    <a id="download" style="display:none" download="video.mp4"><button>⬇️ Télécharger</button></a>
+</div>
+
+<!-- FFmpeg.wasm -->
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.8/dist/ffmpeg.min.js"></script>
+
+<script>
+const { createFFmpeg, fetchFile } = FFmpeg;
+const ffmpeg = createFFmpeg({ log:true });
+
+let mediaRecorder, recordedChunks = [], stream;
+let webcamWidth = 640, webcamHeight = 480;
+
+const preview = document.getElementById("preview");
+const playback = document.getElementById("playback");
+const startBtn = document.getElementById("start");
+const stopBtn = document.getElementById("stop");
+const convertBtn = document.getElementById("convert");
+const downloadLink = document.getElementById("download");
+
+// Init webcam
+async function initCamera() {
+    stream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    preview.srcObject = stream;
+
+    const track = stream.getVideoTracks()[0];
+    const settings = track.getSettings();
+    webcamWidth = settings.width || 640;
+    webcamHeight = settings.height || 480;
+    console.log("Webcam résolution:", webcamWidth, "x", webcamHeight);
+
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if(e.data.size>0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks,{type:"video/webm"});
+        playback.src = URL.createObjectURL(blob);
+        convertBtn.disabled = false;
+    };
+}
+
+// Boutons
+startBtn.onclick = () => {
+    recordedChunks = [];
+    mediaRecorder.start();
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    convertBtn.disabled = true;
+    downloadLink.style.display="none";
+};
+
+stopBtn.onclick = () => {
+    mediaRecorder.stop();
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+};
+
+convertBtn.onclick = async () => {
+    convertBtn.disabled = true;
+    convertBtn.textContent = "⏳ Conversion...";
+
+    if(!ffmpeg.isLoaded()) await ffmpeg.load();
+    const webmBlob = new Blob(recordedChunks,{type:"video/webm"});
+    ffmpeg.FS('writeFile','input.webm',await fetchFile(webmBlob));
+
+    // MP4 H.264 Baseline + AAC VBR 180-265 kbps, auto résolution webcam
+    await ffmpeg.run(
+        '-i','input.webm',
+        '-c:v','libx264',
+        '-profile:v','baseline',
+        '-level','3.0',
+        '-vf',`scale=${webcamWidth}:${webcamHeight}`,
+        '-c:a','aac',
+        '-q:a','2',      // VBR quality
+        '-b:a','256k',   // Max VBR 256 kbps
+        'output.mp4'
+    );
+
+    const data = ffmpeg.FS('readFile','output.mp4');
+    const mp4Blob = new Blob([data.buffer],{type:"video/mp4"});
+    const url = URL.createObjectURL(mp4Blob);
+
+    downloadLink.href = url;
+    downloadLink.style.display = "inline";
+    convertBtn.textContent = "🔄 Convertir en MP4";
+};
+
+initCamera();
+</script>
+
+</body>
+</html>
