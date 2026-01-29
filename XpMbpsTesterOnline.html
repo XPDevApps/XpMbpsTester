@@ -5,32 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Speed Test by XP Dev</title>
 
-  <!-- Google Fonts Poppins -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
 
-  <!-- Materialize CSS -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 
   <style>
     body {
-        font-family:'Poppins',sans-serif;
+        font-family: 'Poppins', sans-serif;
         background: url('https://xpdevapps.github.io/XpMbpsTester/morose.jpg') no-repeat center center fixed;
         background-size: cover;
         padding: 40px;
         text-transform: uppercase;
+        color: white;
     }
     h1 {
-        font-weight:800;
-        color:#ff3b3b;
-        text-shadow:0 0 8px #ff3b3b;
+        font-weight: 800;
+        color: #ff3b3b;
+        text-shadow: 0 0 12px rgba(255, 59, 59, 0.6);
+    }
+    .card {
+        background-color: rgba(38, 50, 56, 0.9) !important;
+        border-radius: 12px;
     }
     .card-content p {
-        font-weight:600;
-        font-size:1.2rem;
+        font-weight: 600;
+        font-size: 1.2rem;
+        margin-bottom: 10px;
     }
-    .progress { height: 30px; margin-top: 20px; }
-    #bar { height: 100%; }
+    .progress { height: 25px; margin-top: 20px; border-radius: 5px; background-color: rgba(255,255,255,0.1); }
+    #bar { height: 100%; transition: width 0.2s ease; }
+    .btn-large { border-radius: 8px; font-weight: 800; }
   </style>
 </head>
 <body>
@@ -38,26 +43,21 @@
 <div class="container">
   <h1 class="center-align">SPEED TEST BY XP DEV</h1>
 
-  <!-- Info Card -->
-  <div class="card blue-grey darken-1">
+  <div class="card">
     <div class="card-content white-text">
-      <span class="card-title">Your Info</span>
+      <span class="card-title">Network Info</span>
       <p id="ipCountry">IP: Loading... | Country: Loading...</p>
-      <p id="connectionType">Connection: Detecting...</p>
       <p id="speed">Download: 0 Mbps | 0 MB/s</p>
       <p id="upload">Upload: 0 Mbps | 0 MB/s</p>
       <p id="latency">Latency: -- ms</p>
-      <p id="diskStatus">Disk Test: --</p>
     </div>
   </div>
 
-  <!-- Progress Bar -->
   <div class="progress">
-    <div id="bar" class="determinate" style="width: 0%"></div>
+    <div id="bar" class="determinate red darken-2" style="width: 0%"></div>
   </div>
 
-  <!-- Buttons -->
-  <div class="center-align" style="margin-top:20px;">
+  <div class="center-align" style="margin-top:30px;">
     <button id="startBtn" class="btn-large red darken-2 waves-effect waves-light">START NETWORK TEST</button>
   </div>
 </div>
@@ -68,27 +68,13 @@
   const uploadText = document.getElementById('upload');
   const latencyText = document.getElementById('latency');
   const ipCountryP = document.getElementById('ipCountry');
-  const connectionTypeP = document.getElementById('connectionType');
-  const diskStatus = document.getElementById('diskStatus');
   const startBtn = document.getElementById('startBtn');
-  const diskBtn = document.getElementById('diskBtn');
 
-  const downloadUrl = 'https://speed.cloudflare.com/__down?bytes=60000000000'; // 1 GB
+  const downloadUrl = 'https://speed.cloudflare.com/__down?bytes=100000000'; // ~100MB for testing
   const latencyUrl = 'https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png';
   const uploadUrl = 'https://httpbin.org/post';
 
-  // Détection du type de connexion
-  function detectConnectionType() {
-    if ('connection' in navigator) {
-      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-      const type = conn.effectiveType || conn.type;
-      connectionTypeP.textContent = `Connection: ${type.toUpperCase()}`;
-    } else {
-      connectionTypeP.textContent = 'Connection: Unknown (Not supported)';
-    }
-  }
-
-  // IP + Country
+  // IP + Country Fetch
   async function fetchIPCountry() {
     try {
       const res = await fetch('https://ipapi.co/json/');
@@ -118,7 +104,7 @@
     }
   }
 
-  // Download réel
+  // Download test
   async function testDownload(url) {
     try {
       const startTime = performance.now();
@@ -136,23 +122,22 @@
         const bitsLoaded = bytesReceived * 8;
         const speedMbps = bitsLoaded / 1e6 / duration;
         const speedMBps = speedMbps / 8;
-        bar.style.width = Math.min(speedMbps, 100) + "%";
+        
+        // Progress bar logic (scales to 100 Mbps for visual)
+        bar.style.width = Math.min((speedMbps / 1), 100) + "%"; 
         speedText.textContent = `Download: ${speedMbps.toFixed(2)} Mbps | ${speedMBps.toFixed(2)} MB/s`;
       }
-
-      const totalTime = (performance.now() - startTime) / 1000;
-      const finalMbps = (bytesReceived * 8) / 1e6 / totalTime;
-      return finalMbps;
+      return true;
     } catch {
       speedText.textContent = "Download Error";
       return 0;
     }
   }
 
-  // Upload réel
+  // Upload test
   async function testUpload() {
     try {
-      const uploadSize = 10 * 1024 * 1024; // 10 MB
+      const uploadSize = 5 * 1024 * 1024; // 5 MB
       const data = new Uint8Array(uploadSize).fill(0);
       const startTime = performance.now();
 
@@ -172,34 +157,26 @@
       return 0;
     }
   }
-  // Boutons
+
+  // Button Logic
   startBtn.addEventListener('click', async () => {
     startBtn.disabled = true;
+    startBtn.textContent = "TESTING...";
     bar.style.width = "0%";
-    speedText.textContent = "Download: 0 Mbps | 0 MB/s";
-    uploadText.textContent = "Upload: 0 Mbps | 0 MB/s";
-    latencyText.textContent = "Latency: -- ms";
-
+    
     await fetchIPCountry();
-    detectConnectionType();
-    const latency = await testLatency(latencyUrl);
+    await testLatency(latencyUrl);
     await testDownload(downloadUrl);
     await testUpload();
 
     startBtn.disabled = false;
+    startBtn.textContent = "RE-RUN TEST";
+    bar.style.width = "100%";
   });
 
-  diskBtn.addEventListener('click', testDiskAPK);
-
-  // Au chargement
+  // Load IP on startup
   fetchIPCountry();
-  detectConnectionType();
 </script>
 
 </body>
 </html>
-
-
-
-
-
