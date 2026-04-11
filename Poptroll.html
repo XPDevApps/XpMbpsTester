@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Action Totale</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: sans-serif;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        #popup {
+            background-color: #121212;
+            padding: 40px;
+            border-radius: 50px;
+            text-align: center;
+            width: 350px;
+            color: white;
+            border: 1px solid #333;
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            background-color: #242424;
+            color: white;
+            border: none;
+            padding: 14px 30px;
+            border-radius: 15px;
+            font-size: 1rem;
+            pointer-events: none; /* TRÈS IMPORTANT : le bouton laisse passer le clic vers le fond */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="popup">
+        <h2>Veut-tu fermer cette pop-up ?</h2>
+        <div class="button-container">
+            <div class="btn">Oui</div>
+            <div class="btn">Non</div>
+        </div>
+    </div>
+
+    <script>
+        // On écoute le clic sur TOUTE la fenêtre
+        window.addEventListener('click', function() {
+            
+            // ICI : Mets l'action que tu veux déclencher
+            alert("Action déclenchée ! Peu importe où tu as cliqué.");
+            
+            // Exemple : redirection vers un site
+            // window.location.href = "https://www.google.com";
+        });
+    </script>
+</body>
+</html>
